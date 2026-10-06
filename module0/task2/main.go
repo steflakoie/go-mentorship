@@ -17,7 +17,11 @@ func (sc *SafeChannel) SafeClose() {
 		close(sc.ch)
 	})
 }
-
+func SafeClose(ch chan int, once *sync.Once) {
+	once.Do(func() {
+		close(ch)
+	})
+}
 func main() {
 
 }
