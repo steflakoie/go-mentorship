@@ -6,7 +6,9 @@ import (
 )
 
 // Работем с pointer receiver, так как меняем состояние стэка
-// И в методе pop, произошла бы утечка из-за работы с копией
+// Pop просто не изменил бы s.elements
+
+var ErrStackEmpty = errors.New("Stack is empty")
 
 type Stack[T any] struct {
 	elements []T
@@ -19,7 +21,7 @@ func (s *Stack[T]) Push(el T) {
 func (s *Stack[T]) Pop() (T, error) {
 	var zero T
 	if s.IsEmpty() {
-		return zero, errors.New("Stack is empty")
+		return zero, ErrStackEmpty
 	}
 
 	index := s.Len() - 1
@@ -35,7 +37,7 @@ func (s *Stack[T]) Pop() (T, error) {
 func (s *Stack[T]) Peek() (T, error) {
 	if s.IsEmpty() {
 		var zero T
-		return zero, errors.New("Stack is empty")
+		return zero, ErrStackEmpty
 	}
 
 	return s.elements[s.Len()-1], nil
