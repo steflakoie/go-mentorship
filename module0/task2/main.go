@@ -1,20 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"sync"
 )
 
 // двойной close паникует, так как это закрытие закрытого кннала.
 // Обойти можно с помощью recover или sync.once.Do
 
-func SafeClose(ch chan int) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Предотвращение повторного закрытия канала")
-		}
-	}()
+type SafeChannel struct {
+	ch   chan int
+	once sync.Once
+}
 
-	close(ch)
+func (sc *SafeChannel) SafeClose() {
+	sc.once.Do(func() {
+		close(sc.ch)
+	})
 }
 
 func main() {
