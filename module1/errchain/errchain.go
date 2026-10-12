@@ -64,8 +64,59 @@ func Is(err, target error) bool {
 // target — указатель на переменную-интерфейс или указатель на конкретный тип.
 // При успехе — присваивает и возвращает true.
 func As(err error, target any) bool {
+	if err == nil {
+		return false
+	}
+
+	if target == nil {
+		panic("errors: target cannot be nil")
+	}
+
+	targetVal := reflect.ValueOf(target)
+	typ := targetVal.Type()
+	if typ.Kind() != reflect.Pointer || targetVal.IsNil() {
+		panic("errors: target must be a non-nil pointer")
+	}
+	targetType := typ.Elem()
+	if targetType.Kind() != reflect.Interface && !targetType.Implements(errorType) {
+		panic("errors: *target must be interface or implement error")
+	}
+
+	return as(err, target, targetType, targetVal)
+
+}
+
+func as(err error, target any, targetType reflect.Type, targetVal reflect.Value) bool {
+	for err != nil {
+
+		if reflect.TypeOf(err).AssignableTo(targetType) {
+			targetVal.Elem().Set(reflect.ValueOf(err))
+			return true
+		}
+
+		if x, ok := err.(interface{ As(any) bool }); ok && x.As(target) {
+			return true
+		}
+
+		switch u := err.(type) {
+		case interface{ Unwrap() error }:
+			err = u.Unwrap()
+		case interface{ Unwrap() []error }:
+			for _, wErr := range u.Unwrap() {
+				if as(wErr, target, targetType, targetVal) {
+					return true
+				}
+			}
+			return false
+		default:
+			return false
+		}
+	}
+
 	return false
 }
+
+var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 func Errchain() {
 
