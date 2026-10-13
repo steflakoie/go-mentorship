@@ -7,7 +7,8 @@ import (
 )
 
 // Ответ на вопрос
-// err имеет type = *someError, а nil это nil/ У нас разные типы значений вот и поулчем nil
+// Typed nil под капотом содержит ненулевой указатель на тип(itab)
+// Интерфейс равен nil, только когда оба слова пустые, и тип, и значение.
 
 type someError struct {
 	message string
@@ -27,23 +28,43 @@ func TestDescribe(t *testing.T) {
 	}{
 		{
 			v:   nil,
-			res: "T:<nil> V:<nil>",
+			res: "nil interface",
 		},
 		{
 			v:   42,
-			res: "T:int V:42",
+			res: "int: 42",
 		},
 		{
 			v:   "hi",
-			res: "T:string V:hi",
+			res: "string: hi",
 		},
 		{
 			v:   err,
-			res: "T:*inspect_test.someError V:<nil>",
+			res: "typed nil of *inspect_test.someError",
 		},
 		{
 			v:   realErr,
-			res: "T:*inspect_test.someError V:err",
+			res: "*inspect_test.someError: err",
+		},
+		{
+			v:   []int{1, 2, 3},
+			res: "[]int: [1 2 3]",
+		},
+		{
+			v:   struct{ f []string }{f: []string{"a"}},
+			res: "struct { f []string }: {[a]}",
+		},
+		{
+			v:   struct{ f []string }{},
+			res: "struct { f []string }: {[]}",
+		},
+		{
+			v:   (chan int)(nil),
+			res: "typed nil of chan int",
+		},
+		{
+			v:   []int(nil),
+			res: "typed nil of []int",
 		},
 	}
 
