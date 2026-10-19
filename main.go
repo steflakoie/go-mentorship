@@ -1,9 +1,5 @@
 package main
 
-import (
-	"go-mentorship/module1/errchain"
-)
-
 // type CustomError struct {
 // 	Code    int
 // 	Message string
@@ -62,5 +58,5 @@ import (
 // }
 
 func main() {
-	errchain.Errchain()
+
 }
