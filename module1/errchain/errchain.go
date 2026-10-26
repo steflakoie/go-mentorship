@@ -4,20 +4,6 @@ import (
 	"reflect"
 )
 
-// Unwrapper — интерфейс, который умеет отдавать следующую ошибку в цепочке.
-type Unwrapper interface {
-	Unwrap() error
-}
-
-func Unwrap(err error) error {
-	u, ok := err.(Unwrapper)
-	if !ok {
-		return nil
-	}
-
-	return u.Unwrap()
-}
-
 // Is проверяет, есть ли target в цепочке err (по значению, через ==).
 // Идёт по цепочке через Unwrapper.
 func Is(err, target error) bool {
@@ -54,6 +40,7 @@ func Is(err, target error) bool {
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -73,10 +60,13 @@ func As(err error, target any) bool {
 	}
 
 	targetVal := reflect.ValueOf(target)
+
 	typ := targetVal.Type()
 	if typ.Kind() != reflect.Pointer || targetVal.IsNil() {
 		panic("errors: target must be a non-nil pointer")
+
 	}
+
 	targetType := typ.Elem()
 	if targetType.Kind() != reflect.Interface && !targetType.Implements(errorType) {
 		panic("errors: *target must be interface or implement error")
@@ -91,6 +81,7 @@ func as(err error, target any, targetType reflect.Type, targetVal reflect.Value)
 
 		if reflect.TypeOf(err).AssignableTo(targetType) {
 			targetVal.Elem().Set(reflect.ValueOf(err))
+
 			return true
 		}
 
@@ -107,6 +98,7 @@ func as(err error, target any, targetType reflect.Type, targetVal reflect.Value)
 					return true
 				}
 			}
+
 			return false
 		default:
 			return false

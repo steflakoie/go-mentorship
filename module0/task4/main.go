@@ -41,6 +41,7 @@ func main() {
 	}
 
 	var err error = &NotFoundError{ResourceID: 42}
+
 	err = fmt.Errorf("repository error: %w", err)
 	deepWrappedErr := fmt.Errorf("api handler failed: %w", err)
 

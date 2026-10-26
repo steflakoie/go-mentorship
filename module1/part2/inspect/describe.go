@@ -5,8 +5,6 @@ import (
 	"reflect"
 )
 
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
-
 func Describe(v any) string {
 	// Даст true, только когда nil. Typed nil = false
 	if v == nil {

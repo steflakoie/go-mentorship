@@ -13,7 +13,7 @@ func (m multiErr) Error() string   { return "multiError" }
 func (m multiErr) Unwrap() []error { return []error(m) }
 
 type errorUncomparable struct {
-	f []string
+	_ []string
 }
 
 func (errorUncomparable) Error() string {
@@ -68,6 +68,7 @@ func TestIs(t *testing.T) {
 		{multiErr{err3, errb}, erra, true},
 		{multiErr{err3, errb}, err1, true},
 		{multiErr{errb, err3}, err1, true},
+		{multiErr{erra, errb}, errors.New("4"), false},
 		{multiErr{nil}, nil, false},
 	}
 
@@ -120,12 +121,49 @@ func TestAs_Success(t *testing.T) {
 	}
 }
 
+func TestAs_Both_nil(t *testing.T) {
+	var origErr error
+	var targetErr error
+
+	if errchain.As(origErr, targetErr) {
+		t.Errorf("As вернул false, хотя оба nil")
+	}
+}
+
 func TestAs_NotFound(t *testing.T) {
 	origErr := errors.New("простая стандартная ошибка")
 	var target CustomError
 
 	if errchain.As(origErr, &target) {
 		t.Errorf("As вернул true, хотя CustomError в цепочке нет")
+	}
+}
+
+type CustomTargetError struct{}
+
+func (CustomTargetError) Error() string { return "custom target" }
+
+func TestAs_MultiErr_Coverage(t *testing.T) {
+	// Инициализируем ошибки из вашего примера
+	err1 := errors.New("1")
+	erra := wrapped{"wrap 2", err1}
+	errb := wrapped{"wrap 3", erra}
+	err3 := errors.New("3")
+
+	// Собираем дерево ошибок
+	// Внутри multiErr лежат erra и errb. Ошибка err3 идет следом.
+	rootErr := multiErr{erra, errb}
+	_ = err3 // err3 из вашего наброска, пока просто объявим
+
+	// Чтобы дойти до нужного `return false`, мы должны искать тип ошибки,
+	// которого НЕТ ни в erra, ни в errb.
+	var target CustomTargetError
+
+	// Вызываем вашу функцию As
+	found := errchain.As(rootErr, &target)
+
+	if found {
+		t.Errorf("Ожидалось false, так как CustomTargetError нет в multiErr")
 	}
 }
 
@@ -155,9 +193,11 @@ func TestAs_MultipleUnwrap(t *testing.T) {
 	joinedErr := errors.Join(err2, err1)
 
 	var target CustomError
+
 	if !errchain.As(joinedErr, &target) {
 		t.Errorf("As не смог найти ошибку внутри errors.Join (Unwrap() []error)")
 	}
+
 	if target.ID != 100 {
 		t.Errorf("Неверный ID извлеченной ошибки: %d", target.ID)
 	}
@@ -168,14 +208,23 @@ func TestAs_Panics(t *testing.T) {
 
 	// 1. Проверка паники на nil-таргет
 	t.Run("nil target", func(t *testing.T) {
-		defer func() { recover() }()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic, got none")
+			}
+		}()
+
 		errchain.As(err, nil)
 		t.Errorf("Функция не выбросила панику при target = nil")
 	})
 
 	// 2. Проверка паники, если передан не указатель
 	t.Run("not a pointer", func(t *testing.T) {
-		defer func() { recover() }()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic, got none")
+			}
+		}()
 		var target CustomError
 		errchain.As(err, target) // Передаем значение, а не &target
 		t.Errorf("Функция не выбросила панику, когда target не является указателем")
@@ -183,7 +232,11 @@ func TestAs_Panics(t *testing.T) {
 
 	// 3. Проверка паники, если указатель не на ошибку или не на интерфейс
 	t.Run("invalid pointer type", func(t *testing.T) {
-		defer func() { recover() }()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic, got none")
+			}
+		}()
 		var target int // Указатель на int не реализует error и не интерфейс
 		errchain.As(err, &target)
 		t.Errorf("Функция не выбросила панику, когда target указывает на int")
@@ -260,5 +313,47 @@ func TestAs_NilInsideUnwrap(t *testing.T) {
 
 	if target == nil {
 		t.Fatal("target = nil, want non-nil")
+	}
+}
+
+var (
+	errTarget = errors.New("target error")
+	errBase   = errors.New("base error")
+)
+
+var benchResult bool
+
+func BenchmarkIs_Direct(b *testing.B) {
+	err := errTarget
+
+	for b.Loop() {
+		benchResult = errchain.Is(err, errTarget)
+	}
+}
+
+func BenchmarkIs_DeepChain5(b *testing.B) {
+	err :=
+		fmt.Errorf("level 1: %w",
+			fmt.Errorf("level 2: %w",
+				fmt.Errorf("level 3: %w",
+					fmt.Errorf("level 4: %w",
+						fmt.Errorf("level 5: %w", errTarget)))))
+
+	for b.Loop() {
+		benchResult = errchain.Is(err, errTarget)
+	}
+}
+
+func BenchmarkIs_MultiErr(b *testing.B) {
+	var errs [10]error
+	for i := 0; i < 9; i++ {
+		errs[i] = fmt.Errorf("error wrapper %d: %w", i, errBase)
+	}
+	errs[9] = errTarget
+
+	multiErr := errors.Join(errs[:]...)
+
+	for b.Loop() {
+		benchResult = errchain.Is(multiErr, errTarget)
 	}
 }

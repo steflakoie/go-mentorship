@@ -1,6 +1,7 @@
 package fileproc
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"strings"
@@ -191,7 +192,7 @@ func TestProcessFiles_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestProcessFiles_EmptyPaths(t *testing.T) {
+func TestProcessFiles_Close_Error(t *testing.T) {
 	var closedFiles int32
 
 	oldOpener := fileOpener
@@ -334,5 +335,90 @@ func TestProcessFiles_ErrorsJoin(t *testing.T) {
 
 	if atomic.LoadInt32(&closedFiles) != 1 {
 		t.Errorf("Ожидалось закрытие 1 успешного файла, закрыто: %d", closedFiles)
+	}
+}
+
+type mockReadCloser struct {
+	io.Reader
+	closeErr error
+}
+
+func (m *mockReadCloser) Close() error {
+	return m.closeErr
+}
+
+type badReader struct{}
+
+func (b *badReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read_failed")
+}
+
+func TestCountFileLines_CloseErr_Only(t *testing.T) {
+	oldOpener := fileOpener
+	defer func() { fileOpener = oldOpener }()
+
+	fileOpener = func(name string) (io.ReadCloser, error) {
+		return &mockReadCloser{
+			Reader:   bytes.NewBufferString("line1\nline2\n"),
+			closeErr: errors.New("os_close_error"),
+		}, nil
+	}
+
+	lines, err := CountFileLines("dummy.txt")
+	if lines != 2 {
+		t.Errorf("Ожидалось 2 строки, получено %d", lines)
+	}
+	if err == nil {
+		t.Fatal("Ожидалась ошибка закрытия, получено nil")
+	}
+	// Проверяем, что сработала ветка `err = closeErr`
+	if err.Error() != "os_close_error" {
+		t.Errorf("Ожидалась чистая ошибка close, получено: %v", err)
+	}
+}
+
+func TestCountFileLines_CloseErr_And_ReadErr(t *testing.T) {
+	oldOpener := fileOpener
+	defer func() { fileOpener = oldOpener }()
+
+	fileOpener = func(name string) (io.ReadCloser, error) {
+		return &mockReadCloser{
+			Reader:   &badReader{}, // этот reader сразу возвращает ошибку
+			closeErr: errors.New("os_close_error"),
+		}, nil
+	}
+
+	_, err := CountFileLines("dummy.txt")
+	if err == nil {
+		t.Fatal("Ожидалась комбинированная ошибка, получено nil")
+	}
+	// Проверяем формат fmt.Errorf("%w (close: %w)", err, closeErr)
+	expectedSubstrings := []string{"read_failed", "close: os_close_error"}
+	for _, sub := range expectedSubstrings {
+		if !strings.Contains(err.Error(), sub) {
+			t.Errorf("Ошибка должна содержать %q, но вернулось: %v", sub, err)
+		}
+	}
+}
+
+func TestCountFileLines_ScannerErr(t *testing.T) {
+	oldOpener := fileOpener
+	defer func() { fileOpener = oldOpener }()
+
+	fileOpener = func(name string) (io.ReadCloser, error) {
+		return &mockReadCloser{
+			// bufio.Scanner по умолчанию падает с ошибкой, если строка > 64 КБ
+			Reader:   bytes.NewBufferString(strings.Repeat("A", 64*1024+1)),
+			closeErr: nil, // закрывается успешно
+		}, nil
+	}
+
+	_, err := CountFileLines("dummy.txt")
+	if err == nil {
+		t.Fatal("Ожидалась ошибка сканера, получено nil")
+	}
+	// bufio.Scanner возвращает bufio.ErrTooLong ("bufio.Scanner: token too long")
+	if !strings.Contains(err.Error(), "token too long") {
+		t.Errorf("Ожидалась ошибка 'token too long', получено: %v", err)
 	}
 }

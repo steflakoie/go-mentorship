@@ -13,7 +13,7 @@ func TestCounter(t *testing.T) {
 	pc := PtrCounter{}
 
 	t.Run("vc test", func(t *testing.T) {
-		vc.WithIncrement()
+		_ = vc.WithIncrement()
 		if vc.Value() != 0 {
 			t.Errorf("vc changed own Value = %v", vc.Value())
 		}

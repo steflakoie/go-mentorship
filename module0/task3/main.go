@@ -31,6 +31,7 @@ func (s *Stack[T]) Pop() (T, error) {
 	s.elements[index] = zero
 
 	s.elements = s.elements[:index]
+
 	return element, nil
 }
 
