@@ -70,7 +70,10 @@ func TestLeakDetected_Channel(t *testing.T) {
 			}
 		}()
 	}
-	t.Cleanup(func() { close(done) })
+	t.Cleanup(func() {
+		close(done)
+		time.Sleep(10 * time.Millisecond)
+	})
 
 	d := leaks.NewLeakDetector()
 
